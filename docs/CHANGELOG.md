@@ -8,6 +8,44 @@ no external consumers) — version numbers below are informational.
 
 ## [Unreleased]
 
+### 2026-08-22 — Premium UI/UX redesign, chat wiring, and remediation pass
+
+#### Added
+- **Client design system and component library** — `client/src/styles/` (tokens, base, type, layout, components, overlay, patterns, pages) and `client/src/components/ui/` (`Button`, `Field`, `Card`, `Badge`, `Avatar`, `Modal`, `Menu`, `Tabs`, `Skeleton`, `EmptyState`, `StatCard`, `PageHeader`, `Alert`, `ToastContext`, a hand-rolled icon set). Every existing page/component was redesigned on top of it. No new npm dependency was introduced for this.
+- **`client/src/pages/NotFound.jsx`** — the `*` catch-all route is a real page now, not a bare `<p>Page not found</p>`.
+- **`client/src/components/Layout/AuthLayout.jsx`** — shared split-screen layout for `Login`/`Register`.
+- **ai-service's first automated test suite** — `ai-service/tests/` (13 tests: `test_util.py`, `test_summarizer.py`, `test_auth.py`), `ai-service/pytest.ini`, `pytest==8.3.3` added to `requirements.txt`. Scoped to logic that needs neither a live DB nor a running Ollama server.
+- **`server/package.json`** — `express-rate-limit` dependency; `"engines": {"node": ">=18"}`; a `"test": "node --test"` script (no test files yet).
+
+#### Fixed
+- **Chat was unreachable from the UI.** `listMyAppointments` (`server/src/controllers/appointment.controller.js`) didn't return the doctor's `users.id`, only `doctor_profiles.id` — the client had no valid id to message a doctor at. One additive join now returns `doctor_user_id` and `doctor_name`; `AppointmentCard` gained a "Message" action wired to `ChatWindow` in both dashboards. The Socket.IO/`/api/chat` layer itself needed no changes.
+- **`socket.js`'s `message:send`** had no try/catch around its `pool.query` call — a DB failure there was unhandled and could crash the whole process. Now wrapped, with basic payload validation and a `message:error` event back to the sender on failure.
+- **`bookAppointment`/`rescheduleAppointment`** never validated `startsAt < endsAt` or rejected past dates. Both now go through a shared `validateAppointmentWindow()` check, returning 400 before touching the database.
+- **`BookingModal.jsx`** hardcoded a 30-minute appointment duration regardless of the doctor's actual `slot_minutes`. It now fetches `GET /doctors/:id/availability` and derives duration from the matching day's `slot_minutes`, falling back to 30 minutes only if that day has no configured availability.
+- **The global Express error handler leaked raw `err.message`** (including Postgres constraint text) to clients for any unhandled error. Now only errors explicitly flagged with `.status` return their message; everything else logs server-side and returns a generic `"Internal server error"`.
+- **`upload.middleware.js`'s `fileFilter`** threw a plain `Error` with no `.status` on a disallowed MIME type, surfacing as a 500 instead of 400. Now carries `.status = 400`; the global handler also now maps any unflagged `MulterError` (e.g. oversized file) to 400.
+- **No rate limiting on `/api/auth/login`/`/api/auth/register`.** Both now go through `express-rate-limit` (20 requests / 15 min / IP).
+- **`JWT_SECRET=change-me` had nothing enforcing a stronger value.** `server/index.js` now refuses to start (fails fast, logs, `process.exit(1)`) if `JWT_SECRET` is unset or still the placeholder.
+- **`PatientDashboard.jsx`, `DoctorDashboard.jsx`, `AdminDashboard.jsx`** all fetched their data with `.then()` and no `.catch()` — a failed request left the page either stuck loading forever or silently showing nothing. All three now have per-section loading and error states. `AdminDashboard.jsx` also guards `stats.popularSpecializations` with `?? []` against shape drift. `DoctorDashboard.handleStatusChange` now reports failures via a toast instead of an unhandled rejection.
+- **`ChatWindow.jsx`'s history fetch** had no loading state or `.catch()`. Both added; it also now surfaces the new `message:error` socket event via a toast.
+- **`DocumentCard.jsx`'s `handleSummarize`** had no catch block at all — a failed summarize call was an unhandled promise rejection. Now caught and reported via a toast (landed as part of the UI redesign pass, not the later remediation pass).
+- **`Login.jsx`/`Register.jsx`'s submit buttons** had no loading/disabled state, allowing a double-submit. Both now disable and show a spinner during the async call (landed as part of the UI redesign pass).
+- **The orphaned `// eslint-disable-next-line`** in `server/index.js` (no ESLint is installed anywhere in the repo) was removed.
+
+#### Repo
+- The project became a git repository for the first time this session and was pushed to `https://github.com/Slv-WebTech/pulsecare`.
+
+#### Verified
+- `npm run build` (client) — clean, 151 modules.
+- All server files touched — `node --check` clean; the server was also booted live (placeholder `DATABASE_URL`, real `JWT_SECRET`) and smoke-tested: the `JWT_SECRET=change-me` fail-fast, the admin-role-rejection 400 (no DB call needed), the appointment-window validation 400s (no DB call needed), and the sanitized generic 500 on an actual DB-connection failure all confirmed working as intended.
+- `ai-service` — all 13 new tests pass in a fresh venv.
+
+#### Not done (see `docs/DEV_CONTEXT.md` Section 10 for the full ranked list)
+- No centralized validation library (zod/express-validator) adopted — today's validation fixes are hand-written at the two specific gaps named above, not a framework-wide change.
+- No server or client test framework installed; no DB-integration tests exist anywhere, including for the auth/IDOR fixes from the 2026-08-14/17 sessions.
+- No pagination on any list endpoint; no `api.js` response interceptor for centralized 401 handling; no React error boundary.
+- Appointment Reminders remains unimplemented (table only) — out of scope by design, see `docs/FUTURE_FEATURES.md`.
+
 ### Fixed
 
 - **Security:** `POST /api/auth/register` no longer allows self-registering as `role: "admin"` — only `patient`/`doctor` are accepted; admin accounts must be provisioned out-of-band. (`server/src/controllers/auth.controller.js`)

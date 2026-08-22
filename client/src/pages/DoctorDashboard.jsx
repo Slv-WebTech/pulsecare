@@ -6,6 +6,8 @@ import { PageHeader } from "../components/ui/PageHeader.jsx";
 import { EmptyState } from "../components/ui/EmptyState.jsx";
 import { SkeletonCard } from "../components/ui/Skeleton.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
+import { Alert } from "../components/ui/Alert.jsx";
+import { useToast } from "../components/ui/ToastContext.jsx";
 import { CalendarIcon } from "../components/ui/icons.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -19,21 +21,28 @@ const FILTERS = [
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
+  const toast = useToast();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [filter, setFilter] = useState("today");
   const [chatPeer, setChatPeer] = useState(null);
 
   useEffect(() => {
-    api.get("/appointments").then(({ data }) => {
-      setAppointments(data.appointments);
-      setLoading(false);
-    });
+    api
+      .get("/appointments")
+      .then(({ data }) => setAppointments(data.appointments))
+      .catch(() => setError("Couldn't load your appointments."))
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleStatusChange(id, status) {
-    const { data } = await api.patch(`/appointments/${id}/status`, { status });
-    setAppointments((prev) => prev.map((a) => (a.id === id ? data.appointment : a)));
+    try {
+      const { data } = await api.patch(`/appointments/${id}/status`, { status });
+      setAppointments((prev) => prev.map((a) => (a.id === id ? data.appointment : a)));
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Couldn't update the appointment status.");
+    }
   }
 
   function handleMessage(appointment) {
@@ -82,7 +91,9 @@ export default function DoctorDashboard() {
       </div>
 
       <div style={{ marginTop: "var(--space-6)" }}>
-        {loading ? (
+        {error ? (
+          <Alert tone="danger">{error}</Alert>
+        ) : loading ? (
           <div className="grid">
             {Array.from({ length: 3 }).map((_, i) => (
               <SkeletonCard key={i} lines={2} />

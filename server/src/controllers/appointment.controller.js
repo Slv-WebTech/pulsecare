@@ -1,5 +1,23 @@
 import { pool } from "../config/db.js";
 
+// Shared by bookAppointment and rescheduleAppointment: both accept a raw
+// startsAt/endsAt pair from the client and need the same sanity checks
+// before it ever reaches the database.
+function validateAppointmentWindow(startsAt, endsAt) {
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "startsAt and endsAt must be valid dates";
+  }
+  if (start >= end) {
+    return "startsAt must be before endsAt";
+  }
+  if (start < new Date()) {
+    return "startsAt must be in the future";
+  }
+  return null;
+}
+
 // Resolves whether `user` (the requester) is allowed to modify appointment `appointmentId`:
 // its patient, its doctor, or an admin. Prevents any authenticated user from mutating
 // another user's appointment by guessing/incrementing an id (IDOR).
@@ -25,6 +43,11 @@ export async function bookAppointment(req, res) {
   const { doctorId, startsAt, endsAt, notes } = req.body;
   if (!doctorId || !startsAt || !endsAt) {
     return res.status(400).json({ error: "doctorId, startsAt, and endsAt are required" });
+  }
+
+  const windowError = validateAppointmentWindow(startsAt, endsAt);
+  if (windowError) {
+    return res.status(400).json({ error: windowError });
   }
 
   try {
@@ -100,6 +123,11 @@ export async function rescheduleAppointment(req, res) {
 
   if (!startsAt || !endsAt) {
     return res.status(400).json({ error: "startsAt and endsAt are required" });
+  }
+
+  const windowError = validateAppointmentWindow(startsAt, endsAt);
+  if (windowError) {
+    return res.status(400).json({ error: windowError });
   }
 
   const { exists, isOwner } = await getAppointmentAccess(id, req.user);

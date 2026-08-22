@@ -5,18 +5,31 @@ import { StatCard } from "../components/ui/StatCard.jsx";
 import { SkeletonStatCard } from "../components/ui/Skeleton.jsx";
 import { Card } from "../components/ui/Card.jsx";
 import { EmptyState } from "../components/ui/EmptyState.jsx";
+import { Alert } from "../components/ui/Alert.jsx";
 import { UsersIcon, StethoscopeIcon, CalendarIcon, TrendingUpIcon, InboxIcon } from "../components/ui/icons.jsx";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    api.get("/admin/stats").then(({ data }) => setStats(data));
+    api
+      .get("/admin/stats")
+      .then(({ data }) => setStats(data))
+      .catch(() => setError("Couldn't load platform stats. Try refreshing the page."));
   }, []);
 
-  const maxCount = stats?.popularSpecializations?.length
-    ? Math.max(...stats.popularSpecializations.map((s) => s.count))
-    : 0;
+  const specializations = stats?.popularSpecializations ?? [];
+  const maxCount = specializations.length ? Math.max(...specializations.map((s) => s.count)) : 0;
+
+  if (error) {
+    return (
+      <>
+        <PageHeader eyebrow="Admin" title="Overview" subtitle="Platform activity at a glance." />
+        <Alert tone="danger">{error}</Alert>
+      </>
+    );
+  }
 
   return (
     <>
@@ -42,7 +55,7 @@ export default function AdminDashboard() {
         <Card>
           {!stats ? (
             <p className="text-meta">Loading…</p>
-          ) : stats.popularSpecializations.length === 0 ? (
+          ) : specializations.length === 0 ? (
             <EmptyState
               icon={InboxIcon}
               title="No data yet"
@@ -50,7 +63,7 @@ export default function AdminDashboard() {
             />
           ) : (
             <div className="rank-list">
-              {stats.popularSpecializations.map((s, i) => (
+              {specializations.map((s, i) => (
                 <div className="rank-row" key={s.specialization}>
                   <span className="rank-index">{i + 1}</span>
                   <span className="rank-name">{s.specialization}</span>

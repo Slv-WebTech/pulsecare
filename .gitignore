@@ -23,6 +23,8 @@ npm-debug.log*
 .claude/
 
 # python
-ai-service/__pycache__/
+ai-service/**/__pycache__/
 ai-service/.venv/
+ai-service/.venv_test/
 ai-service/*.pyc
+ai-service/.pytest_cache/

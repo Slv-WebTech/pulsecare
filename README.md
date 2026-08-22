@@ -82,11 +82,20 @@ uvicorn main:app --reload --port 8000
 ## Status
 
 Auth (register/login), doctor search/filter, appointment booking, document upload with
-AI summarization, admin stats, and real-time provider messaging (Socket.IO) are wired
-end-to-end across all three dashboards (patient/doctor/admin). The client has a full
-design system and reusable UI component library (`client/src/styles/`,
-`client/src/components/ui/`) layered on top of the original scaffold — tokens, forms,
-cards, modals, toasts, skeleton/empty states, and a responsive layout shell.
+AI summarization, admin stats, and real-time provider messaging (Socket.IO, reachable
+from the UI via a "Message" action on each appointment) are wired end-to-end across all
+three dashboards (patient/doctor/admin). The client has a full design system and
+reusable UI component library (`client/src/styles/`, `client/src/components/ui/`)
+layered on top of the original scaffold — tokens, forms, cards, modals, toasts,
+skeleton/empty states, and a responsive layout shell. The server has basic hardening:
+appointment-window validation, rate limiting on auth endpoints, a fail-fast
+`JWT_SECRET` check, sanitized error responses, and a crash-safe chat socket handler.
 
-Business logic, validation, and the real LLM prompts still need to be filled in per
-feature — this is a working scaffold, not a production-hardened app.
+Testing: `ai-service` has a real `pytest` suite (`cd ai-service && pytest -v`);
+`server`/`client` do not yet have automated test coverage.
+
+Business logic and the real LLM prompts still need further work per feature, and a
+centralized validation library, pagination, and DB-integration tests remain open — see
+`docs/` for the full, actively-maintained development history and roadmap
+(`docs/DEV_CONTEXT.md` is the best starting point). This is a working scaffold, not a
+production-hardened app.

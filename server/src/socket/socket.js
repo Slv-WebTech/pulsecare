@@ -20,16 +20,26 @@ export function attachSocket(httpServer, corsOrigin) {
   io.on("connection", (socket) => {
     socket.join(`user:${socket.user.id}`);
 
-    socket.on("message:send", async ({ recipientId, appointmentId, body, fileUrl }) => {
-      const result = await pool.query(
-        `INSERT INTO messages (appointment_id, sender_id, recipient_id, body, file_url)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
-        [appointmentId || null, socket.user.id, recipientId, body || null, fileUrl || null]
-      );
+    socket.on("message:send", async ({ recipientId, appointmentId, body, fileUrl } = {}) => {
+      if (!recipientId || (!body && !fileUrl)) {
+        socket.emit("message:error", { error: "recipientId and a body or fileUrl are required" });
+        return;
+      }
 
-      const message = result.rows[0];
-      io.to(`user:${recipientId}`).to(`user:${socket.user.id}`).emit("message:new", message);
+      try {
+        const result = await pool.query(
+          `INSERT INTO messages (appointment_id, sender_id, recipient_id, body, file_url)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [appointmentId || null, socket.user.id, recipientId, body || null, fileUrl || null]
+        );
+
+        const message = result.rows[0];
+        io.to(`user:${recipientId}`).to(`user:${socket.user.id}`).emit("message:new", message);
+      } catch (err) {
+        console.error("message:send failed:", err);
+        socket.emit("message:error", { error: "Failed to send message" });
+      }
     });
 
     socket.on("typing", ({ recipientId }) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../services/api.js";
 import { Modal } from "../ui/Modal.jsx";
 import { Field } from "../ui/Field.jsx";
@@ -6,11 +6,39 @@ import { Alert } from "../ui/Alert.jsx";
 import Button from "../ui/Button.jsx";
 import { useToast } from "../ui/ToastContext.jsx";
 
+const DEFAULT_SLOT_MINUTES = 30;
+
 export default function BookingModal({ doctor, onClose, onBooked }) {
   const [startsAt, setStartsAt] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [availability, setAvailability] = useState([]);
   const toast = useToast();
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get(`/doctors/${doctor.id}/availability`)
+      .then(({ data }) => {
+        if (!cancelled) setAvailability(data.availability);
+      })
+      .catch(() => {
+        // Non-fatal — booking still works with the default slot length below.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [doctor.id]);
+
+  // The doctor's real slot length for the chosen day, per `doctor_availability`
+  // (day_of_week uses the same 0=Sun..6=Sat convention as Date#getDay), falling
+  // back to a sane default if that day has no configured availability yet.
+  function slotMinutesFor(date) {
+    const match = availability.find((a) => a.day_of_week === date.getDay());
+    return match?.slot_minutes || DEFAULT_SLOT_MINUTES;
+  }
+
+  const selectedSlotMinutes = startsAt ? slotMinutesFor(new Date(startsAt)) : null;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -18,7 +46,7 @@ export default function BookingModal({ doctor, onClose, onBooked }) {
     setSubmitting(true);
     try {
       const start = new Date(startsAt);
-      const end = new Date(start.getTime() + 30 * 60 * 1000);
+      const end = new Date(start.getTime() + slotMinutesFor(start) * 60 * 1000);
       const { data } = await api.post("/appointments", {
         doctorId: doctor.id,
         startsAt: start.toISOString(),
@@ -41,7 +69,10 @@ export default function BookingModal({ doctor, onClose, onBooked }) {
       onClose={onClose}
     >
       <form className="auth-form" onSubmit={handleSubmit}>
-        <Field label="Date & time">
+        <Field
+          label="Date & time"
+          hint={selectedSlotMinutes ? `This will be a ${selectedSlotMinutes}-minute appointment.` : undefined}
+        >
           {(id) => (
             <input
               id={id}

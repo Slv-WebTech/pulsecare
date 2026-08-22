@@ -9,7 +9,9 @@ export const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      return cb(new Error("Only PDF, JPG, and PNG files are allowed"));
+      const error = new Error("Only PDF, JPG, and PNG files are allowed");
+      error.status = 400;
+      return cb(error);
     }
     cb(null, true);
   },

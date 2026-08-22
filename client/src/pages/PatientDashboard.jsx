@@ -12,6 +12,7 @@ import { Tabs, TabPanel } from "../components/ui/Tabs.jsx";
 import { EmptyState } from "../components/ui/EmptyState.jsx";
 import { SkeletonCard } from "../components/ui/Skeleton.jsx";
 import { Modal } from "../components/ui/Modal.jsx";
+import { Alert } from "../components/ui/Alert.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { SearchIcon, CalendarIcon, FileTextIcon } from "../components/ui/icons.jsx";
 
@@ -24,24 +25,35 @@ export default function PatientDashboard() {
   const [chatPeer, setChatPeer] = useState(null);
   const [activeTab, setActiveTab] = useState("doctors");
   const [loading, setLoading] = useState({ doctors: true, appointments: true, documents: true });
+  const [errors, setErrors] = useState({ doctors: "", appointments: "", documents: "" });
 
   useEffect(() => {
     searchDoctors({});
-    api.get("/appointments").then(({ data }) => {
-      setAppointments(data.appointments);
-      setLoading((prev) => ({ ...prev, appointments: false }));
-    });
-    api.get("/documents").then(({ data }) => {
-      setDocuments(data.documents);
-      setLoading((prev) => ({ ...prev, documents: false }));
-    });
+
+    api
+      .get("/appointments")
+      .then(({ data }) => setAppointments(data.appointments))
+      .catch(() => setErrors((prev) => ({ ...prev, appointments: "Couldn't load your appointments." })))
+      .finally(() => setLoading((prev) => ({ ...prev, appointments: false })));
+
+    api
+      .get("/documents")
+      .then(({ data }) => setDocuments(data.documents))
+      .catch(() => setErrors((prev) => ({ ...prev, documents: "Couldn't load your documents." })))
+      .finally(() => setLoading((prev) => ({ ...prev, documents: false })));
   }, []);
 
   async function searchDoctors(filters) {
     setLoading((prev) => ({ ...prev, doctors: true }));
-    const { data } = await api.get("/doctors", { params: filters });
-    setDoctors(data.doctors);
-    setLoading((prev) => ({ ...prev, doctors: false }));
+    setErrors((prev) => ({ ...prev, doctors: "" }));
+    try {
+      const { data } = await api.get("/doctors", { params: filters });
+      setDoctors(data.doctors);
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, doctors: "Couldn't load doctors. Please try again." }));
+    } finally {
+      setLoading((prev) => ({ ...prev, doctors: false }));
+    }
   }
 
   function handleBooked(appointment) {
@@ -81,7 +93,9 @@ export default function PatientDashboard() {
         <TabPanel tabKey="doctors" active={activeTab}>
           <div className="section">
             <DoctorSearchFilters onSearch={searchDoctors} />
-            {loading.doctors ? (
+            {errors.doctors ? (
+              <Alert tone="danger">{errors.doctors}</Alert>
+            ) : loading.doctors ? (
               <div className="grid">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <SkeletonCard key={i} />
@@ -105,7 +119,9 @@ export default function PatientDashboard() {
 
         <TabPanel tabKey="appointments" active={activeTab}>
           <div className="section">
-            {loading.appointments ? (
+            {errors.appointments ? (
+              <Alert tone="danger">{errors.appointments}</Alert>
+            ) : loading.appointments ? (
               <div className="grid">
                 {Array.from({ length: 2 }).map((_, i) => (
                   <SkeletonCard key={i} lines={2} />
@@ -130,7 +146,9 @@ export default function PatientDashboard() {
         <TabPanel tabKey="documents" active={activeTab}>
           <div className="section">
             <DocumentUpload onUploaded={handleDocumentUploaded} />
-            {loading.documents ? (
+            {errors.documents ? (
+              <Alert tone="danger">{errors.documents}</Alert>
+            ) : loading.documents ? (
               <div className="grid">
                 {Array.from({ length: 2 }).map((_, i) => (
                   <SkeletonCard key={i} lines={2} />

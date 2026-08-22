@@ -13,6 +13,13 @@ import { attachSocket } from "./src/socket/socket.js";
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === "change-me") {
+  console.error(
+    "Fatal: JWT_SECRET is unset or still the placeholder value. Set a strong secret in server/.env before starting the server."
+  );
+  process.exit(1);
+}
+
 const app = express();
 const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 
@@ -28,10 +35,23 @@ app.use("/api/documents", documentRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/admin", adminRoutes);
 
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || "Internal server error" });
+
+  // Multer's own validation errors (bad MIME type, oversized file) don't carry
+  // a `.status` by default and would otherwise surface as a raw 500.
+  if (err.name === "MulterError" && !err.status) {
+    err.status = 400;
+  }
+
+  // Only a deliberately-flagged error (one a controller/middleware explicitly
+  // marked with `.status`) has its message returned to the client. Anything
+  // else — an unexpected DB error, a bug — is logged above but never echoed
+  // back verbatim, since that can leak internal details (e.g. Postgres
+  // constraint text).
+  const status = err.status || 500;
+  const message = err.status ? err.message : "Internal server error";
+  res.status(status).json({ error: message });
 });
 
 const httpServer = createServer(app);

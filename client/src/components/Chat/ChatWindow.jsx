@@ -4,16 +4,28 @@ import { getSocket } from "../../services/socket.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { Avatar } from "../ui/Avatar.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
+import { Alert } from "../ui/Alert.jsx";
+import { Spinner } from "../ui/Spinner.jsx";
+import { useToast } from "../ui/ToastContext.jsx";
 import { MessageIcon, SendIcon } from "../ui/icons.jsx";
 
 export default function ChatWindow({ peerId, peerName, hideHeader = false }) {
   const { user } = useAuth();
+  const toast = useToast();
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    api.get(`/chat/${peerId}`).then(({ data }) => setMessages(data.messages));
+    setLoading(true);
+    setError("");
+    api
+      .get(`/chat/${peerId}`)
+      .then(({ data }) => setMessages(data.messages))
+      .catch(() => setError("Couldn't load this conversation."))
+      .finally(() => setLoading(false));
 
     const socket = getSocket();
     if (!socket) return;
@@ -24,9 +36,17 @@ export default function ChatWindow({ peerId, peerName, hideHeader = false }) {
       }
     }
 
+    function handleError({ error: message } = {}) {
+      toast.error(message || "Failed to send message");
+    }
+
     socket.on("message:new", handleNew);
-    return () => socket.off("message:new", handleNew);
-  }, [peerId]);
+    socket.on("message:error", handleError);
+    return () => {
+      socket.off("message:new", handleNew);
+      socket.off("message:error", handleError);
+    };
+  }, [peerId, toast]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -52,7 +72,15 @@ export default function ChatWindow({ peerId, peerName, hideHeader = false }) {
         </div>
       )}
       <div className="chat-window-messages">
-        {messages.length === 0 ? (
+        {loading ? (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Spinner />
+          </div>
+        ) : error ? (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Alert tone="danger">{error}</Alert>
+          </div>
+        ) : messages.length === 0 ? (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <EmptyState
               icon={MessageIcon}
