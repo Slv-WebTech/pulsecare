@@ -43,6 +43,11 @@ class SummarizeRequest(BaseModel):
     fileType: str
 
 
+def count_pdf_pages(file_bytes: bytes) -> int:
+    with pymupdf.open(stream=file_bytes, filetype="pdf") as doc:
+        return len(doc)
+
+
 def build_images(file_bytes: bytes, file_type: str) -> list[str]:
     if file_type != "application/pdf":
         return [base64.b64encode(file_bytes).decode("utf-8")]
@@ -56,8 +61,8 @@ def build_images(file_bytes: bytes, file_type: str) -> list[str]:
 
 
 async def fetch_file(file_url: str) -> bytes:
-    host = urlparse(file_url).hostname
-    if host not in ALLOWED_FILE_HOSTS:
+    parsed = urlparse(file_url)
+    if parsed.scheme != "https" or parsed.hostname not in ALLOWED_FILE_HOSTS:
         raise HTTPException(status_code=400, detail="fileUrl host is not allowed")
 
     async with httpx.AsyncClient(timeout=30) as http_client:
@@ -79,8 +84,11 @@ async def fetch_file(file_url: str) -> bytes:
 async def summarize_document(payload: SummarizeRequest):
     file_bytes = await fetch_file(payload.fileUrl)
 
+    total_pages = None
     try:
         images = build_images(file_bytes, payload.fileType)
+        if payload.fileType == "application/pdf":
+            total_pages = count_pdf_pages(file_bytes)
     except RuntimeError:
         raise HTTPException(status_code=422, detail="Could not read the document (corrupt or unsupported file)")
 
@@ -94,6 +102,16 @@ async def summarize_document(payload: SummarizeRequest):
         raise HTTPException(status_code=504, detail="Ollama request timed out")
 
     try:
-        return parse_json_response(text)
+        summary = parse_json_response(text)
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="AI response was not valid JSON")
+
+    if not isinstance(summary, dict):
+        raise HTTPException(status_code=502, detail="AI response was not a JSON object")
+
+    # Tell the caller when a long PDF was only partially read instead of truncating silently.
+    if total_pages is not None:
+        summary["pagesRead"] = len(images)
+        summary["totalPages"] = total_pages
+        summary["truncated"] = total_pages > len(images)
+    return summary
