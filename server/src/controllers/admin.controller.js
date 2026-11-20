@@ -1,5 +1,22 @@
 import { pool } from "../config/db.js";
 
+export async function listAuditLog(req, res) {
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+  const params = [limit, offset];
+  let where = "";
+  if (req.query.userId && Number.isInteger(Number(req.query.userId))) {
+    params.push(Number(req.query.userId));
+    where = "WHERE user_id = $3";
+  }
+  const result = await pool.query(
+    `SELECT id, user_id, action, resource_type, resource_id, ip, created_at
+     FROM audit_log ${where} ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
+    params
+  );
+  res.json({ entries: result.rows });
+}
+
 export async function getDashboardStats(req, res) {
   const [{ rows: patientRows }, { rows: doctorRows }, { rows: apptRows }, { rows: specRows }] =
     await Promise.all([
