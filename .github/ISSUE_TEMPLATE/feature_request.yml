@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or need
+      description: Who is affected (patient, doctor, admin) and what are they trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy / security impact
+      description: Does this touch patient data, access control, or the AI service? How should it be protected?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

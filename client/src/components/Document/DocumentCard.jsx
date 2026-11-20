@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../../services/api.js";
+import { openDocument } from "../../services/documents.js";
 import { Card } from "../ui/Card.jsx";
 import Button from "../ui/Button.jsx";
 import { useToast } from "../ui/ToastContext.jsx";
@@ -28,9 +29,13 @@ export default function DocumentCard({ document, onSummarized }) {
           <FileTextIcon />
         </span>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <a href={document.file_url} target="_blank" rel="noreferrer" className="document-card-name">
+          <button
+            type="button"
+            className="document-card-name link-button"
+            onClick={() => openDocument(document.id).catch(() => toast.error("Couldn't open this document."))}
+          >
             {document.original_name}
-          </a>
+          </button>
           <p className="document-card-date">
             {new Date(document.uploaded_at).toLocaleDateString(undefined, {
               month: "short",
@@ -53,6 +58,11 @@ export default function DocumentCard({ document, onSummarized }) {
             <p className="document-summary-abnormal">
               <AlertTriangleIcon />
               {document.ai_summary.abnormalValues}
+            </p>
+          )}
+          {document.ai_summary.truncated && (
+            <p className="document-summary-followup" role="note">
+              Only the first {document.ai_summary.pagesRead} of {document.ai_summary.totalPages} pages were summarized.
             </p>
           )}
           {document.ai_summary.followUp && (

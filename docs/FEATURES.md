@@ -23,10 +23,10 @@
 | 2 | Doctor Search & Filters | `IMPLEMENTED` | `/patient` | `GET /api/doctors`, `GET /api/doctors/:id/availability`, `PUT /api/doctors/profile` | `DoctorSearchFilters.jsx`, `DoctorCard.jsx`, `PatientDashboard.jsx` |
 | 3 | Appointment Booking | `IMPLEMENTED` *(promoted 2026-08-22)* | `/patient` | `POST /api/appointments` | `BookingModal.jsx` |
 | 4 | Doctor Dashboard | `IMPLEMENTED` *(promoted 2026-08-22)* | `/doctor` | `GET /api/appointments`, `PATCH /api/appointments/:id/status`, `PATCH /api/appointments/:id/reschedule` | `DoctorDashboard.jsx`, `AppointmentCard.jsx` |
-| 5 | Medical Document Upload | `IMPLEMENTED` | `/patient` | `POST /api/documents`, `GET /api/documents` | `DocumentUpload.jsx` |
-| 6 | AI Document Summarization | `PARTIALLY_IMPLEMENTED` | `/patient` | `POST /api/documents/:id/summarize` (server) → `POST /summarize` (ai-service) | `DocumentCard.jsx` |
+| 5 | Medical Document Upload | `IMPLEMENTED` *(private storage, signed access, doctor sharing, 2026-11-20)* | `/patient`, `/doctor` | `POST /api/documents`, `GET /api/documents`, `GET /api/documents/:id/file`, `GET /api/documents/patient/:patientId` | `DocumentUpload.jsx`, `PatientDocumentsModal.jsx` |
+| 6 | AI Document Summarization | `IMPLEMENTED` *(requires a running Ollama; tested with mocks)* | `/patient` | `POST /api/documents/:id/summarize` (server) → `POST /summarize` (ai-service) | `DocumentCard.jsx` |
 | 7 | Doctor-Patient Chat | `IMPLEMENTED` *(promoted 2026-08-22 — also became reachable from the UI for the first time this session, see below)* | `/patient`, `/doctor` (opened via a "Message" action on `AppointmentCard`, rendered in a `Modal`) | `GET /api/chat/:userId`, `PATCH /api/chat/:id/read`, `SOCKET message:send`, `SOCKET typing`, `SOCKET message:error` (new) | `ChatWindow.jsx`, `socket.js` (client service), `AppointmentCard.jsx`, `PatientDashboard.jsx`, `DoctorDashboard.jsx` |
-| 8 | Appointment Reminders | `PLANNED` | none | none | none |
+| 8 | Appointment Reminders | `IMPLEMENTED` *(in-app only, 2026-11-20; email/SMS not configured)* | `/patient`, `/doctor` (toast) | worker `server/src/jobs/reminders.js`, Socket.IO `reminder:due` | `App.jsx` |
 | 9 | Patient Dashboard | `IMPLEMENTED` *(promoted 2026-08-22)* | `/patient` | `GET /api/doctors`, `GET /api/appointments`, `GET /api/documents` | `PatientDashboard.jsx` |
 | 10 | Admin Dashboard | `IMPLEMENTED` *(promoted 2026-08-22)* | `/admin` | `GET /api/admin/stats` | `AdminDashboard.jsx` |
 
@@ -45,7 +45,7 @@
 - `JWT_SECRET` / `JWT_EXPIRES_IN` environment variables (`server/.env.example`)
 - `users` table in `server/src/models/schema.sql` (with `user_role` enum: patient/doctor/admin)
 - `axios` instance with Bearer-token interceptor (`client/src/services/api.js`)
-- Browser `localStorage` for token persistence
+- An httpOnly refresh cookie (the access token is held in memory only)
 
 **Related pages:** `/login`, `/register`
 
@@ -223,22 +223,13 @@
 
 ## 8. Appointment Reminders
 
-**Status:** `PLANNED`
+**Status:** `IMPLEMENTED` (in-app delivery only)
 
-**Purpose:** Intended to notify patients (and/or doctors) ahead of a scheduled appointment.
+**What exists:** a reminder row is created when an appointment is booked and updated when it is rescheduled (`send_at` = 24 h before the visit, or now if sooner). A worker (`server/src/jobs/reminders.js`, every 60 s, `FOR UPDATE SKIP LOCKED`) delivers due reminders once, skipping cancelled or past appointments, by emitting Socket.IO `reminder:due` to the patient's and doctor's rooms. The client shows it as a toast.
 
-**User value:** Would reduce missed appointments by prompting patients before their scheduled time — but this value is not currently realized since no delivery mechanism exists.
+**Not done (needs a product/vendor decision):** email and SMS delivery. `deliver()` in the worker is the single place to plug a provider in.
 
-**Dependencies:**
-- `reminders` table only (`server/src/models/schema.sql`): `id`, `appointment_id` (FK to `appointments`, `ON DELETE CASCADE`), `send_at`, `sent` (boolean, default `false`)
-
-**Related pages:** None — no route, page, or UI element for reminders exists.
-
-**Related APIs:** None — no controller, route, or scheduler/cron endpoint exists.
-
-**Related components:** None.
-
-**Evidence / gaps (from synthesis):** Only a `reminders` table exists in `schema.sql` (`appointment_id`, `send_at`, `sent`). No controller, route, scheduler/cron job, or notification-sending code for reminders appears anywhere in the 21 server files reviewed in the discovery pass. This is called out as a critical issue in the canonical synthesis: one of the ten named product features has no implementation beyond a dangling database table. An open question in the synthesis asks who or what is meant to trigger reminders, since no scheduler or worker process exists in the codebase.
+**Evidence:** live integration test "reminders: created on booking, delivered once, skipped when cancelled"; verified in Chrome with a real socket connection.
 
 ---
 

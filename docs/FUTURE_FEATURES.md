@@ -169,7 +169,7 @@ Items here are the least specified, carry the most open questions, and in one ca
 | # | Feature | Priority | Complexity | Builds on existing code? |
 |---|---------|----------|------------|---------------------------|
 | 1 | AI appointment assistant (beyond basic query parsing) | High | Medium | Yes — extends `ai-service` `/assistant/query` |
-| 2 | SMS / email appointment reminders | High | Medium–High | Partial — `reminders` table exists, zero app code |
+| 2 | SMS / email appointment reminders | High | Medium | Partial: in-app reminders and the worker exist; only a delivery provider is missing |
 | 3 | Calendar sync | Medium | Medium | Partial — `appointments` data exists, no export/sync code |
 | 4 | Analytics & reporting | Medium | Medium | Yes — extends `admin.controller.js` stats pattern |
 | 5 | PWA support | Medium | Low–Medium | No — new client tooling |

@@ -1,5 +1,10 @@
 # Interview Guide — AI-Powered Healthcare Appointment & Patient Portal
 
+> **Status note (2026-11-20):** this document was written during the early scaffold phase and parts of it
+> are historical. For the current state see [`QA-REPORT.md`](./QA-REPORT.md) (what was tested, fixed and
+> what remains), [`CHANGELOG.md`](./CHANGELOG.md) and the root [`README.md`](../README.md). Where this
+> document disagrees with them, they win.
+
 **Snapshot date:** 2026-08-14
 **Project age at time of writing:** ~1 hour (freshly generated scaffold, no commit history, no `.git` directory yet)
 **Overall project health score (canonical synthesis):** 4.5 / 10 *(as of 2026-08-17 — was 4.1 at the original 2026-08-14 snapshot; see `docs/PROJECT_SCORE.md` for the current, dated breakdown)*

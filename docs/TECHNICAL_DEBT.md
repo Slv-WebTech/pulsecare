@@ -1,5 +1,10 @@
 # Technical Debt Register
 
+> **Status note (2026-11-20):** this document was written during the early scaffold phase and parts of it
+> are historical. For the current state see [`QA-REPORT.md`](./QA-REPORT.md) (what was tested, fixed and
+> what remains), [`CHANGELOG.md`](./CHANGELOG.md) and the root [`README.md`](../README.md). Where this
+> document disagrees with them, they win.
+
 **Project:** AI-Powered Healthcare Appointment & Patient Portal
 **Scope:** `client/` (React/Vite), `server/` (Express/PostgreSQL/Socket.IO), `ai-service/` (FastAPI/Ollama)
 **Codebase age:** ~1 hour old at initial assessment (2026-08-14) — see the 2026-08-22 update below for what's changed since

@@ -3,10 +3,13 @@ dist/
 dist-ssr/
 *.local
 
-# env
+# env: never commit real environment files (only the *.example templates are tracked)
 .env
-.env.local
+.env.*
 **/.env
+**/.env.*
+!.env.example
+!**/.env.example
 
 # logs
 logs
@@ -28,3 +31,18 @@ ai-service/.venv/
 ai-service/.venv_test/
 ai-service/*.pyc
 ai-service/.pytest_cache/
+
+# throwaway TLS material for the fake Cloudinary in live tests
+server/tests/integration/certs/
+
+# uploads, coverage, local data and dumps
+uploads/
+coverage/
+.nyc_output/
+*.dump
+*.sql.gz
+*.sqlite
+pgdata/
+*.pem
+*.key
+*.p12

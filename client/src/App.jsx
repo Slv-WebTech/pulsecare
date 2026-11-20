@@ -8,6 +8,9 @@ import DoctorDashboard from "./pages/DoctorDashboard.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
+import { useEffect } from "react";
+import { onSocketEvent } from "./services/socket.js";
+import { useToast } from "./components/ui/ToastContext.jsx";
 
 function Landing() {
   const { user } = useAuth();
@@ -19,6 +22,17 @@ const BARE_ROUTES = ["/login", "/register"];
 export default function App() {
   const { pathname } = useLocation();
   const isBare = BARE_ROUTES.includes(pathname);
+  const { user } = useAuth();
+  const toast = useToast();
+
+  // In-app appointment reminders pushed by the server (24h before the visit).
+  useEffect(() => {
+    if (!user) return undefined;
+    return onSocketEvent("reminder:due", ({ startsAt, with: other }) => {
+      const when = new Date(startsAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+      toast.info(`Reminder: appointment with ${other} on ${when}`, 10000);
+    });
+  }, [user, toast]);
 
   const routes = (
     <Routes>
@@ -54,13 +68,18 @@ export default function App() {
   );
 
   if (isBare) {
-    return <div className="app-shell">{routes}</div>;
+    return <div className="app-shell"><a href="#main" className="skip-link">Skip to content</a><div id="main" tabIndex={-1}>{routes}</div></div>;
   }
 
   return (
     <div className="app-shell">
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
       <Navbar />
-      <main className="app-main full-bleed-page">{routes}</main>
+      <main id="main" tabIndex={-1} className="app-main full-bleed-page">
+        {routes}
+      </main>
     </div>
   );
 }

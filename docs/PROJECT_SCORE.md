@@ -1,5 +1,10 @@
 # Project Score — Healthcare Appointment & Patient Portal
 
+> **Status note (2026-11-20):** this document was written during the early scaffold phase and parts of it
+> are historical. For the current state see [`QA-REPORT.md`](./QA-REPORT.md) (what was tested, fixed and
+> what remains), [`CHANGELOG.md`](./CHANGELOG.md) and the root [`README.md`](../README.md). Where this
+> document disagrees with them, they win.
+
 This scorecard evaluates the healthcare-app scaffold as it stands today: a freshly generated
 project (~1 hour old, not yet a git repository) spanning a React/Vite client, an Express/PostgreSQL
 server, and a FastAPI/Ollama ai-service. Scores reflect actual evidence found in the codebase during

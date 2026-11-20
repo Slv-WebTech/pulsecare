@@ -149,3 +149,13 @@ Both are static liveness checks with no dependencies on the database, Cloudinary
 ## What's intentionally not in this document
 
 The following exist in code but have a confirmed functional or security gap and are documented instead in `FEATURES.md` / `PROJECT_PLAN.md`: registration/login (the `role`-selection privilege-escalation gap is **fixed**, but `Login.jsx`/`Register.jsx` submit buttons still have no loading/disabled state — a remaining client-side functional gap), appointment booking and status/reschedule (the missing-ownership-check IDOR is **fixed**, but this file still requires a full fresh verification pass — including a DB integration test — before being promoted here), doctor and admin dashboards (missing client-side loading/error handling), doctor-patient chat (unvalidated socket handler, no optimistic client send), AI document summarization (its authentication, SSRF, and file-size gaps are all **fixed** as of 2026-08-17, but the client's `DocumentCard` still has no catch block on failure and the Ollama integration hasn't been runtime-verified against a live model — see `FEATURES.md`), and appointment reminders (database table only, no application code).
+
+---
+
+## Added 2026-11-20 (see QA-REPORT.md)
+
+- **Slot-based booking** with per-doctor timezones, an atomic no-overlap constraint, and a per-patient limit.
+- **Cancel / reschedule** for patients; **paging** on doctor and appointment lists.
+- **Private documents** with signed, audited access; patients can share a document with a doctor and doctors can view shared documents.
+- **In-app reminders**, **AI assistant search**, **PDF truncation notice** on summaries.
+- **Revocable sessions** (refresh-cookie) and an **audit log** with an admin API.

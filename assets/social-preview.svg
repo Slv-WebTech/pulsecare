@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="PulseCare: care that keeps its own rhythm">
+  <title>PulseCare</title>
+  <defs>
+    <linearGradient id="sp-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#073430"/>
+      <stop offset="1" stop-color="#0D6E62"/>
+    </linearGradient>
+    <linearGradient id="sp-mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#0A4F46"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#sp-bg)"/>
+  <polyline fill="none" stroke="#A7F3D0" stroke-opacity="0.28" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"
+    points="0,505 40,505 70,458 110,556 150,488 175,505 300,505 330,458 370,556 410,488 435,505 560,505 590,458 630,556 670,488 695,505 820,505 850,458 890,556 930,488 955,505 1080,505 1110,458 1150,556 1190,488 1215,505 1280,505"/>
+  <g transform="translate(96 120) scale(3.4375)">
+    <rect width="64" height="64" rx="15" fill="url(#sp-mark)"/>
+    <path d="M32 51C14 39 10 30 10 24C10 18 14.5 14 20 14C25 14 29.5 16.5 32 21C34.5 16.5 39 14 44 14C49.5 14 54 18 54 24C54 30 50 39 32 51Z" fill="#fff"/>
+    <polyline points="13,31 23,31 27,23 33,40 38,27 41,31 51,31" fill="none" stroke="#0B5D52" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g font-family="'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif">
+    <text x="352" y="210" font-size="112" font-weight="800" fill="#fff" letter-spacing="-2">PulseCare</text>
+    <text x="356" y="296" font-size="44" fill="#A7F3D0">Care that keeps its own rhythm.</text>
+    <text x="356" y="380" font-size="30" fill="#DCF5F0" fill-opacity="0.9">Book real free slots &#8226; Share records privately</text>
+    <text x="356" y="426" font-size="30" fill="#DCF5F0" fill-opacity="0.9">AI summaries that never diagnose &#8226; Open source</text>
+    <text x="96" y="616" font-size="28" fill="#A7F3D0" fill-opacity="0.8">React &#8226; Express &#8226; PostgreSQL &#8226; FastAPI + Ollama</text>
+  </g>
+</svg>
