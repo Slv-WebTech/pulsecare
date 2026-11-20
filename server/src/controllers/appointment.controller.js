@@ -1,4 +1,19 @@
 import { pool } from "../config/db.js";
+import { canSetStatus, canTransition, canReschedule, toId, parsePaging } from "../utils/validation.js";
+import { fitsAvailability, DEFAULT_TIMEZONE } from "../utils/time.js";
+
+// Max upcoming (scheduled/confirmed) appointments one patient may hold; stops slot-hoarding.
+const MAX_ACTIVE_APPOINTMENTS = Number(process.env.MAX_ACTIVE_APPOINTMENTS || 10);
+
+// Reminder is due 24h before the visit (or immediately if the visit is sooner than that).
+async function upsertReminder(appointmentId, startsAt) {
+  const sendAt = new Date(Math.max(Date.now(), new Date(startsAt).getTime() - 24 * 3600 * 1000));
+  await pool.query(
+    `INSERT INTO reminders (appointment_id, send_at, sent) VALUES ($1, $2, false)
+     ON CONFLICT (appointment_id) DO UPDATE SET send_at = EXCLUDED.send_at, sent = false`,
+    [appointmentId, sendAt]
+  );
+}
 
 // Shared by bookAppointment and rescheduleAppointment: both accept a raw
 // startsAt/endsAt pair from the client and need the same sanity checks
@@ -23,7 +38,7 @@ function validateAppointmentWindow(startsAt, endsAt) {
 // another user's appointment by guessing/incrementing an id (IDOR).
 async function getAppointmentAccess(appointmentId, user) {
   const result = await pool.query(
-    `SELECT a.patient_id, dp.user_id AS doctor_user_id
+    `SELECT a.patient_id, a.status, dp.user_id AS doctor_user_id
      FROM appointments a
      JOIN doctor_profiles dp ON dp.id = a.doctor_id
      WHERE a.id = $1`,
@@ -36,7 +51,38 @@ async function getAppointmentAccess(appointmentId, user) {
     user.role === "admin" ||
     row.patient_id === user.id ||
     row.doctor_user_id === user.id;
-  return { exists: true, isOwner };
+  return { exists: true, isOwner, status: row.status };
+}
+
+// The doctor must exist, and — if they have published availability — the requested
+// window must fall inside it. Also rejects any overlap with the doctor's other
+// non-cancelled appointments (the UNIQUE constraint only catches identical start times).
+async function checkDoctorAvailability(doctorId, startsAt, endsAt, ignoreAppointmentId = null) {
+  const doctor = await pool.query("SELECT id, timezone FROM doctor_profiles WHERE id = $1", [doctorId]);
+  if (doctor.rowCount === 0) return { status: 404, message: "Doctor not found" };
+
+  const windows = (
+    await pool.query(
+      "SELECT day_of_week, start_time, end_time, slot_minutes FROM doctor_availability WHERE doctor_id = $1",
+      [doctorId]
+    )
+  ).rows;
+  if (
+    windows.length > 0 &&
+    !fitsAvailability(new Date(startsAt), new Date(endsAt), windows, doctor.rows[0].timezone || DEFAULT_TIMEZONE)
+  ) {
+    return { status: 400, message: "Requested time is not an available slot for this doctor" };
+  }
+
+  const overlap = await pool.query(
+    `SELECT 1 FROM appointments
+     WHERE doctor_id = $1 AND status <> 'cancelled' AND id IS DISTINCT FROM $4
+       AND starts_at < $3 AND ends_at > $2
+     LIMIT 1`,
+    [doctorId, startsAt, endsAt, ignoreAppointmentId]
+  );
+  if (overlap.rowCount > 0) return { status: 409, message: "This slot is already booked" };
+  return null;
 }
 
 export async function bookAppointment(req, res) {
@@ -45,9 +91,27 @@ export async function bookAppointment(req, res) {
     return res.status(400).json({ error: "doctorId, startsAt, and endsAt are required" });
   }
 
+  if (!toId(doctorId)) {
+    return res.status(400).json({ error: "doctorId must be a positive integer" });
+  }
+
   const windowError = validateAppointmentWindow(startsAt, endsAt);
   if (windowError) {
     return res.status(400).json({ error: windowError });
+  }
+
+  const active = await pool.query(
+    `SELECT count(*)::int AS n FROM appointments
+     WHERE patient_id = $1 AND status IN ('scheduled','confirmed') AND starts_at > now()`,
+    [req.user.id]
+  );
+  if (active.rows[0].n >= MAX_ACTIVE_APPOINTMENTS) {
+    return res.status(409).json({ error: `You can hold at most ${MAX_ACTIVE_APPOINTMENTS} upcoming appointments` });
+  }
+
+  const availabilityError = await checkDoctorAvailability(doctorId, startsAt, endsAt);
+  if (availabilityError) {
+    return res.status(availabilityError.status).json({ error: availabilityError.message });
   }
 
   try {
@@ -57,10 +121,11 @@ export async function bookAppointment(req, res) {
        RETURNING *`,
       [req.user.id, doctorId, startsAt, endsAt, notes || null]
     );
+    await upsertReminder(result.rows[0].id, startsAt);
     res.status(201).json({ appointment: result.rows[0] });
   } catch (err) {
-    if (err.code === "23505") {
-      // unique_violation on (doctor_id, starts_at)
+    if (err.code === "23505" || err.code === "23P01") {
+      // unique/exclusion violation: the slot was taken concurrently
       return res.status(409).json({ error: "This slot is already booked" });
     }
     throw err;
@@ -68,6 +133,7 @@ export async function bookAppointment(req, res) {
 }
 
 export async function listMyAppointments(req, res) {
+  const { limit, offset } = parsePaging(req.query, { defaultLimit: 200, maxLimit: 500 });
   const isDoctor = req.user.role === "doctor";
   const column = isDoctor ? "a.doctor_id" : "a.patient_id";
   const idValue = isDoctor
@@ -85,28 +151,36 @@ export async function listMyAppointments(req, res) {
      JOIN doctor_profiles dp ON dp.id = a.doctor_id
      JOIN users du ON du.id = dp.user_id
      WHERE ${column} = $1
-     ORDER BY a.starts_at DESC`,
-    [idValue]
+     ORDER BY a.starts_at DESC
+     LIMIT $2 OFFSET $3`,
+    [idValue, limit, offset]
   );
 
   res.json({ appointments: result.rows });
 }
 
 export async function updateAppointmentStatus(req, res) {
-  const { id } = req.params;
+  const id = toId(req.params.id);
+  if (!id) return res.status(404).json({ error: "Appointment not found" });
   const { status } = req.body;
 
   const allowed = new Set(["scheduled", "confirmed", "completed", "cancelled"]);
   if (!allowed.has(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
+  if (!canSetStatus(req.user.role, status)) {
+    return res.status(403).json({ error: "Your role cannot set this status" });
+  }
 
-  const { exists, isOwner } = await getAppointmentAccess(id, req.user);
+  const { exists, isOwner, status: current } = await getAppointmentAccess(id, req.user);
   if (!exists) {
     return res.status(404).json({ error: "Appointment not found" });
   }
   if (!isOwner) {
     return res.status(403).json({ error: "You do not have access to this appointment" });
+  }
+  if (!canTransition(current, status)) {
+    return res.status(409).json({ error: `Cannot change a ${current} appointment to ${status}` });
   }
 
   const result = await pool.query(
@@ -118,7 +192,8 @@ export async function updateAppointmentStatus(req, res) {
 }
 
 export async function rescheduleAppointment(req, res) {
-  const { id } = req.params;
+  const id = toId(req.params.id);
+  if (!id) return res.status(404).json({ error: "Appointment not found" });
   const { startsAt, endsAt } = req.body;
 
   if (!startsAt || !endsAt) {
@@ -130,12 +205,23 @@ export async function rescheduleAppointment(req, res) {
     return res.status(400).json({ error: windowError });
   }
 
-  const { exists, isOwner } = await getAppointmentAccess(id, req.user);
+  const { exists, isOwner, status: current } = await getAppointmentAccess(id, req.user);
   if (!exists) {
     return res.status(404).json({ error: "Appointment not found" });
   }
   if (!isOwner) {
     return res.status(403).json({ error: "You do not have access to this appointment" });
+  }
+  if (!canReschedule(current)) {
+    return res.status(409).json({ error: `A ${current} appointment cannot be rescheduled` });
+  }
+
+  const doctorRow = await pool.query("SELECT doctor_id FROM appointments WHERE id = $1", [id]);
+  const availabilityError = await checkDoctorAvailability(
+    doctorRow.rows[0].doctor_id, startsAt, endsAt, id
+  );
+  if (availabilityError) {
+    return res.status(availabilityError.status).json({ error: availabilityError.message });
   }
 
   try {
@@ -144,9 +230,10 @@ export async function rescheduleAppointment(req, res) {
        WHERE id = $3 RETURNING *`,
       [startsAt, endsAt, id]
     );
+    await upsertReminder(id, startsAt);
     res.json({ appointment: result.rows[0] });
   } catch (err) {
-    if (err.code === "23505") {
+    if (err.code === "23505" || err.code === "23P01") {
       return res.status(409).json({ error: "This slot is already booked" });
     }
     throw err;
