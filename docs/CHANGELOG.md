@@ -8,6 +8,32 @@ no external consumers) — version numbers below are informational.
 
 ## [Unreleased]
 
+### 2026-11-20: QA pass, security hardening, scheduling and branding
+
+Full detail and test evidence: [`QA-REPORT.md`](./QA-REPORT.md).
+
+#### Security and privacy
+- **Sessions:** 15-minute in-memory access token + rotating 7-day refresh token in an `HttpOnly; SameSite=Lax` cookie, stored hashed (`refresh_tokens`); logout and replay detection revoke server-side; `/auth/refresh` and `/auth/logout` accept only `CLIENT_ORIGIN`. No token in `localStorage` any more.
+- **Documents are private:** uploaded as Cloudinary `authenticated` assets; the API never returns storage URLs; `GET /api/documents/:id/file` issues a signed URL to the owner or to a doctor the patient shared the document with. New `GET /api/documents/patient/:patientId` for doctors.
+- **Audit log** (`audit_log`, `GET /api/admin/audit`) for PHI access and auth events.
+- **Access control:** chat (REST + Socket.IO) requires a care relationship; uploads can only attach to the uploader's own appointment; patients may only cancel; completed/cancelled appointments are terminal; doctor emails removed from the public doctor list; strict validation of ids, doctor profiles, passwords and emails.
+- API CSP and security headers, JSON body cap, general and auth rate limits (env-configurable); production client build embeds a strict CSP.
+
+#### Features
+- Slot-based booking: `GET /api/doctors/:id/slots`, per-doctor IANA timezone (DST-aware), exact aligned slots only, per-patient limit on upcoming appointments.
+- Booking integrity: Postgres exclusion constraint (`btree_gist`) makes overlapping bookings impossible even under concurrency; cancelled appointments release their slot.
+- In-app appointment reminders (worker + Socket.IO toast).
+- AI assistant proxy `POST /api/assistant/query` and an "Ask assistant" search box; summaries report when a long PDF was only partly read.
+- Patient UI: cancel (two-step), reschedule, "share with a doctor", pagination. Doctor UI: view shared documents. Skip link, nav landmark, mobile tab-strip hint.
+- Pagination (`limit`/`offset`) on list endpoints; `pg_trgm` indexes for doctor search.
+
+#### Tests and tooling
+- Server: 14 unit + 26 live integration tests (with stubbed Cloudinary and ai-service), load-test script. ai-service: 39 tests. Client: 21 Vitest tests. GitHub Actions CI.
+- Migrations `migrations_001_*` and `migrations_002_*` for existing databases (re-runnable).
+
+#### Docs and branding
+- New README, logo/banner/favicon/social-preview assets, Open Graph tags, PR and issue templates, `QA-REPORT.md`.
+
 ### 2026-08-22 — Premium UI/UX redesign, chat wiring, and remediation pass
 
 #### Added

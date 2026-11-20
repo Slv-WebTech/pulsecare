@@ -1,5 +1,10 @@
 # Developer Context — Healthcare Appointment & Patient Portal
 
+> **Status note (2026-11-20):** this document was written during the early scaffold phase and parts of it
+> are historical. For the current state see [`QA-REPORT.md`](./QA-REPORT.md) (what was tested, fixed and
+> what remains), [`CHANGELOG.md`](./CHANGELOG.md) and the root [`README.md`](../README.md). Where this
+> document disagrees with them, they win.
+
 Last updated: 2026-08-22 (see update note below; original scaffold assessment was 2026-08-14)
 Maintained for: continuity across development sessions. Read this file first when picking up work on this repo.
 
@@ -323,7 +328,7 @@ PORT=5000
 CLIENT_ORIGIN=http://localhost:5173
 DATABASE_URL=postgres://user:password@localhost:5432/healthcare
 JWT_SECRET=change-me
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=15m
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=

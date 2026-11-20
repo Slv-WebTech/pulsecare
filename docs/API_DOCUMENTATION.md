@@ -122,7 +122,18 @@ Response `200` (inferred, verify against controller):
 }
 ```
 Confirmed: the handler verifies the bcrypt password hash and issues a JWT signed with
-`JWT_SECRET`, expiring per `JWT_EXPIRES_IN` (`.env.example` default `7d`).
+`JWT_SECRET`, expiring per `JWT_EXPIRES_IN` (`.env.example` default `15m`), and a refresh cookie is set (see `/api/auth/refresh` below).
+
+### POST `/api/auth/refresh` / POST `/api/auth/logout`
+
+Cookie-authenticated (`rt` httpOnly cookie, `Path=/api/auth`); only accepted from `CLIENT_ORIGIN`.
+
+- `refresh` rotates the refresh token and returns `{ user, token }` (access token, 15 min). `401`
+  = no/invalid/expired/revoked session (replaying an old token revokes the whole session family);
+  `409 {"code":"rotated"}` = another tab rotated it a moment ago, retry once.
+- `logout` revokes the refresh token and clears the cookie (`204`).
+
+`register` and `login` now also set the refresh cookie.
 
 ### GET `/api/auth/me`
 Headers: `Authorization: Bearer <token>`
@@ -168,6 +179,12 @@ Response `200` (inferred, verify against controller):
 ```
 Client strips empty filter values before calling this endpoint (`DoctorSearchFilters.jsx`
 builds `cleaned` via `Object.entries(filters).filter(([, v]) => v !== "")`).
+
+### GET `/api/doctors/:id/slots?date=YYYY-MM-DD`
+
+Public. Free, bookable slots for that local date in the doctor's timezone:
+`{ "timezone": "Asia/Kolkata", "date": "...", "slots": [{ "startsAt": ISO, "endsAt": ISO }] }`.
+`400` bad date, `404` unknown doctor. Bookings must use exactly one of these slots.
 
 ### GET `/api/doctors/:id/availability`
 `:id` is the `doctor_profiles.id`.
@@ -299,6 +316,8 @@ Response `200` (inferred, verify against controller):
 |---|---|---|---|---|
 | POST | `/api/documents` | any authenticated (`requireAuth`) | Upload a file to Cloudinary and record metadata. | Implemented |
 | GET | `/api/documents` | any authenticated (`requireAuth`) | List the caller's own uploaded documents. | Implemented |
+| GET | `/api/documents/patient/:patientId` | `doctor`, `admin` | List documents a patient attached to the caller's own appointments (requires a care relationship). | Implemented |
+| POST | `/api/assistant/query` | any authenticated | Proxy to ai-service: natural-language search → doctor filters. Body `{message}` (≤500 chars). | Implemented (no UI yet) |
 | POST | `/api/documents/:id/summarize` | any authenticated (`requireAuth`) | Call the ai-service to summarize a document the caller owns. | Implemented (round trip works; see hardening gaps under ai-service) |
 
 ### POST `/api/documents`
@@ -336,6 +355,17 @@ Response `200` (inferred, verify against controller — field name inferred by a
 }
 ```
 Lists only the caller's own documents. Unbounded — no pagination (documented tech debt).
+
+### GET `/api/documents/:id/file`
+
+Returns `{ "url": "<signed Cloudinary URL>" }` for the owning patient, or a doctor/admin the
+document was shared with via an appointment; otherwise `404`. Audited (`document.file_access`).
+Document objects never include `file_url`/`public_id`.
+
+### GET `/api/documents/patient/:patientId`
+
+`doctor`/`admin` only. Documents that patient attached to this doctor's appointments (`403`
+without a care relationship). Audited (`document.list_patient`).
 
 ### POST `/api/documents/:id/summarize`
 Headers: `Authorization: Bearer <token>`
@@ -435,6 +465,10 @@ not detailed in discovery evidence beyond "broadcast to the recipient's room" �
 | Method | Path | Auth | Description | Status |
 |---|---|---|---|---|
 | GET | `/api/admin/stats` | admin (`requireAuth` + `requireRole('admin')`) | Dashboard stats: patient/doctor counts, appointment completion rate, top specializations. | Implemented |
+
+### GET `/api/admin/audit?limit=&offset=&userId=`
+
+Admin only. Newest-first audit entries `{ id, user_id, action, resource_type, resource_id, ip, created_at }`.
 
 ### GET `/api/admin/stats`
 Headers: `Authorization: Bearer <token>` (role must be `admin`)
@@ -646,8 +680,4 @@ API contract.
 
 ## Not covered by any endpoint above
 
-Per the canonical feature assessment, **Appointment Reminders** has no application code: only a
-`reminders` table exists in `schema.sql` (`appointment_id`, `send_at`, `sent`). There is no
-route, controller, scheduler, or notification-sending code anywhere in the reviewed codebase, so
-no reminders endpoint appears in this reference — this is a **Planned** feature, not an
-undocumented one.
+**Appointment reminders** have no HTTP endpoint by design: they are created when appointments are booked or rescheduled and delivered by a background worker as the Socket.IO event `reminder:due` (`{ appointmentId, startsAt, with }`, sent to `user:<id>` rooms). Email/SMS delivery is not configured.

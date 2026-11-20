@@ -1,5 +1,10 @@
 # Project Style Guide
 
+> **Status note (2026-11-20):** this document was written during the early scaffold phase and parts of it
+> are historical. For the current state see [`QA-REPORT.md`](./QA-REPORT.md) (what was tested, fixed and
+> what remains), [`CHANGELOG.md`](./CHANGELOG.md) and the root [`README.md`](../README.md). Where this
+> document disagrees with them, they win.
+
 **Project:** AI-Powered Healthcare Appointment & Patient Portal
 **Scope of this document:** UI style, UX interaction patterns, and code style/conventions for the three services — `client/` (React + Vite), `server/` (Express + PostgreSQL + Socket.IO), and `ai-service/` (FastAPI + Ollama (local LLM)).
 

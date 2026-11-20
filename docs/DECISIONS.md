@@ -93,9 +93,9 @@ separate Socket.IO connection without a shared session store between server proc
 middleware (`requireAuth`) and the Socket.IO handshake (`auth.token`), simplifying the realtime
 integration.
 
-**Consequences:** No server-side revocation mechanism exists — a compromised token remains valid
-until expiry (`JWT_EXPIRES_IN=7d`), and `JWT_SECRET` currently defaults to the placeholder
-`change-me` in `.env.example` with nothing enforcing a stronger value in production.
+**Consequences:** **Superseded by ADR-009 (2026-11-20).** Originally no server-side revocation existed and tokens lived 7 days. The server
+now refuses to start with a missing or placeholder `JWT_SECRET`, access tokens live 15 minutes, and sessions are revocable
+through a rotating refresh token.
 
 ---
 
@@ -357,3 +357,20 @@ server.
 | ADR-007 | Replace Cloudinary + paid Claude API with free/open-source alternatives — *Claude half done, see ADR-008; Cloudinary half not implemented* | 2026-08-14 |
 | ADR-008 | Local Ollama (llama3.2-vision) replaces the Claude API | 2026-08-17 |
 | ADR-009 | Shared bearer token + Cloudinary-only host allowlist to secure ai-service | 2026-08-17 |
+
+---
+
+## ADR-009: Short-lived access token + rotating httpOnly refresh token, private documents, audit log
+
+**Date:** 2026-11-20
+
+**Context:** QA found a 7-day bearer token in `localStorage` (readable by any injected script, not revocable), public Cloudinary
+document URLs, and no record of who read patient data.
+
+**Decision:** keep the stateless JWT for per-request auth but shorten it to 15 minutes and hold it in memory only; add a rotating
+refresh token in an `HttpOnly; SameSite=Lax` cookie stored hashed server-side (revocable, replay-detecting); store documents as
+Cloudinary `authenticated` assets served only through an access-checked, audited, signed-URL endpoint; add an `audit_log` table.
+
+**Consequences:** logout and theft really revoke the session; a stolen access token is useful for at most 15 minutes; documents are not
+reachable by URL guessing. Costs: one extra table and a refresh round trip at page load, cookie/CORS configuration must match between
+API and client origins, and signed URLs only expire if the Cloudinary plan supports token authentication.

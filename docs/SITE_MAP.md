@@ -1,5 +1,10 @@
 # Site Map — Client Routes
 
+> **Status note (2026-11-20):** this document was written during the early scaffold phase and parts of it
+> are historical. For the current state see [`QA-REPORT.md`](./QA-REPORT.md) (what was tested, fixed and
+> what remains), [`CHANGELOG.md`](./CHANGELOG.md) and the root [`README.md`](../README.md). Where this
+> document disagrees with them, they win.
+
 `healthcare-app` / client (React + Vite, `react-router-dom` v6)
 Scope: this document covers the routes defined in `client/src/App.jsx` only. It cross-references
 components from `client/src` and API endpoints from `server/index.js` / `server/src/routes/*`.

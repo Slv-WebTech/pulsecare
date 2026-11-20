@@ -5,8 +5,10 @@ in `server/src/models/schema.sql`. It is the single source of truth for the data
 there is currently no migration tool in use (see [Migrations](#migrations) below).
 
 > **Scope note.** This document describes the schema exactly as written in `schema.sql`.
-> Where a table exists but has no application code built on top of it yet (`reminders`),
-> that is called out explicitly rather than implied.
+> **Updated 2026-11-20:** new tables `refresh_tokens` and `audit_log`; new columns `doctor_profiles.timezone`,
+> `documents.public_id` / `resource_type`; `reminders.appointment_id` is now `UNIQUE`; `no_double_booking` is an
+> exclusion constraint; `pg_trgm` indexes. `schema.sql` is the source of truth; upgrade existing databases with
+> `migrations_001_*.sql` then `migrations_002_*.sql` (both re-runnable).
 
 ## Contents
 
@@ -20,6 +22,8 @@ there is currently no migration tool in use (see [Migrations](#migrations) below
   - [documents](#documents)
   - [messages](#messages)
   - [reminders](#reminders)
+  - [refresh_tokens](#refresh_tokens)
+  - [audit_log](#audit_log)
 - [The `no_double_booking` constraint](#the-no_double_booking-constraint)
 - [Indexes](#indexes)
 - [Entity relationships](#entity-relationships)
@@ -111,6 +115,7 @@ separate table rather than columns on `users` — a one-to-one extension.
 | `experience_years`  | `INTEGER`       | `NOT NULL`, `DEFAULT 0`                                          |
 | `languages`         | `TEXT[]`        | `NOT NULL`, `DEFAULT '{}'`                                       |
 | `bio`               | `TEXT`          | nullable                                                         |
+| `timezone`          | `VARCHAR(64)`   | nullable IANA zone (e.g. `Asia/Kolkata`) the availability windows are expressed in; NULL = server `DEFAULT_TIMEZONE` |
 
 **Foreign keys:** `user_id → users(id)`, `ON DELETE CASCADE` — deleting a user deletes
 their doctor profile.
@@ -188,6 +193,8 @@ requested.
 | `patient_id`     | `INTEGER`     | `NOT NULL`, `REFERENCES users(id) ON DELETE CASCADE`                    |
 | `appointment_id` | `INTEGER`     | nullable, `REFERENCES appointments(id) ON DELETE SET NULL`              |
 | `file_url`       | `TEXT`        | `NOT NULL`                                                               |
+| `public_id`      | `TEXT`        | nullable; Cloudinary public id of the *authenticated* asset (NULL = legacy public upload)            |
+| `resource_type`  | `VARCHAR(10)` | nullable; `raw` (PDF) or `image`                                                                     |
 | `file_type`      | `VARCHAR(20)` | `NOT NULL`                                                               |
 | `original_name`  | `VARCHAR(255)`| `NOT NULL`                                                               |
 | `ai_summary`     | `JSONB`       | nullable                                                                 |
@@ -248,44 +255,38 @@ Scheduled appointment reminders.
 
 **Foreign keys:** `appointment_id → appointments(id)`, `ON DELETE CASCADE`.
 
-**Purpose:** Intended to track when a reminder for a given appointment should be sent
-and whether it has been. **This table exists in the schema but has no application code
-built on it anywhere in the codebase** — per the canonical synthesis, "Appointment
-Reminders" is a `PLANNED` feature: there is no controller, route, scheduler/cron job, or
-notification-sending logic that reads or writes this table. It is a dangling table
-awaiting a feature implementation.
+**Purpose:** one row per appointment (`UNIQUE appointment_id`). Created at booking, updated on reschedule;
+the reminder worker (`server/src/jobs/reminders.js`) delivers due rows once and sets `sent = true`.
+
+### `refresh_tokens`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `SERIAL` | PK |
+| `user_id` | `INTEGER` | FK to `users`, `ON DELETE CASCADE` |
+| `token_hash` | `CHAR(64)` | SHA-256 of the refresh token (the raw token only exists in the httpOnly cookie), `UNIQUE` |
+| `expires_at` / `revoked_at` / `created_at` | `TIMESTAMPTZ` | rotation and logout set `revoked_at` |
+
+### `audit_log`
+
+Append-only trail of PHI access and auth events: `id BIGSERIAL`, `user_id` (nullable, `ON DELETE SET NULL`),
+`action` (e.g. `document.file_access`, `auth.login_failed`), `resource_type`, `resource_id`, `ip`, `created_at`.
 
 ## The `no_double_booking` constraint
 
 ```sql
-CONSTRAINT no_double_booking UNIQUE (doctor_id, starts_at)
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+ALTER TABLE appointments ADD CONSTRAINT no_double_booking
+  EXCLUDE USING gist (doctor_id WITH =, tstzrange(starts_at, ends_at) WITH &&)
+  WHERE (status <> 'cancelled');
 ```
 
-This is a table-level `UNIQUE` constraint on `appointments` spanning `(doctor_id,
-starts_at)`. It is the mechanism that prevents two patients from booking the same doctor
-for the same start time.
-
-**Why a database constraint instead of an application-level check:** the project's
-architecture decisions record this explicitly — the team considered an application-level
-"check, then insert" approach, a NoSQL store, and a DB-level `UNIQUE` constraint, and
-chose the constraint because it is *race-safe by construction*: concurrent insert
-attempts for the same `(doctor_id, starts_at)` pair will always resolve to exactly one
-winner at the database level, a guarantee that an application-level "check if a slot is
-free, then insert" sequence cannot provide (two concurrent requests can both pass the
-check before either has inserted).
-
-**How it surfaces in the API:** `POST /api/appointments` catches the resulting Postgres
-unique-violation and maps it to an HTTP `409` response. One noted consequence from the
-canonical review: any booking conflict that isn't specifically caught still falls
-through to the server's global error handler, which currently returns the raw Postgres
-error message to the client rather than a sanitized one — an information-disclosure gap
-tracked separately in the security review, not a flaw in the constraint itself.
-
-**Scope of what it guarantees:** the constraint matches on the exact `starts_at`
-timestamp. It prevents two appointments from being booked for one doctor at the identical
-start instant; it does not by itself express anything about overlapping time ranges with
-different start times — that logic (along with the `starts_at < ends_at` ordering check)
-lives, or currently does not live, in application code.
+An **exclusion constraint**: no two non-cancelled appointments for the same doctor may overlap in time. It is
+race-safe by construction (two concurrent requests for overlapping slots always resolve to one winner) and a
+cancelled appointment releases its slot. The original `UNIQUE (doctor_id, starts_at)` only caught identical start
+times and kept cancelled slots blocked. The API maps the violation (`23P01`, or `23505`) to HTTP `409`. The
+controller additionally checks that the requested time is an exact slot inside the doctor's availability, in the
+doctor's timezone (`doctor_profiles.timezone`), before the insert.
 
 ## Indexes
 
