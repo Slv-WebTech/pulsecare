@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hc
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: healthcare
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hc" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://hc@127.0.0.1:5432/healthcare
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Load schema
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f src/models/schema.sql
+        env:
+          PGHOST: 127.0.0.1
+      - name: Generate throwaway TLS cert for the fake Cloudinary
+        run: node tests/integration/make-cert.mjs
+      - name: Start API under test (stubbed Cloudinary + ai-service)
+        run: |
+          export JWT_SECRET=$(openssl rand -hex 32) AI_SERVICE_TOKEN=$(openssl rand -hex 16)
+          echo "AI_SERVICE_TOKEN=$AI_SERVICE_TOKEN" >> "$GITHUB_ENV"
+          PORT=5081 CLIENT_ORIGIN=http://localhost:5183 \
+          AUTH_RATE_LIMIT=60 NODE_ENV=test CLOUDINARY_CLOUD_NAME=demo CLOUDINARY_API_KEY=k CLOUDINARY_API_SECRET=s \
+          NODE_EXTRA_CA_CERTS=$PWD/tests/integration/certs/stub-cert.pem \
+          CLOUDINARY_UPLOAD_PREFIX=https://127.0.0.1:5098 AI_SERVICE_URL=http://127.0.0.1:5097 \
+          node index.js &
+          for i in $(seq 1 30); do curl -sf http://localhost:5081/health && break; sleep 1; done
+      - name: Live API integration tests
+        run: node --test tests/integration/api.live.test.js
+        env:
+          E2E_API: http://localhost:5081
+          E2E_STUBS: "1"
+
+  ai-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-service/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
