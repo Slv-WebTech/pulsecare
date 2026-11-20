@@ -1,0 +1,35 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not include real patient data, credentials, tokens or `.env` contents.** For security problems use the
+        private process in [SECURITY.md](../../SECURITY.md) instead of a public issue.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [client, server, ai-service, database, docs, CI]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Log in as a patient\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "OS, browser, Node/Python/Postgres versions"
