@@ -254,3 +254,11 @@
   gap: var(--space-4);
   flex-wrap: wrap;
 }
+
+/* Fade the right edge of an overflowing tab strip on phones so users can tell it scrolls. */
+@media (max-width: 520px) {
+  .tabs {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+}

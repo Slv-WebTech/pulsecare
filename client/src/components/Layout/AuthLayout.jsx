@@ -13,7 +13,7 @@ function BrandMark() {
       <span className="brand-mark">
         <PulseIcon size={17} />
       </span>
-      Healthcare Portal
+      PulseCare
     </Link>
   );
 }

@@ -280,9 +280,15 @@
   background: var(--ink-100);
   border-radius: var(--radius-md);
   gap: 2px;
+  /* Never wider than the viewport: scroll inside the control on narrow screens. */
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .segmented button {
+  flex: none;
+  white-space: nowrap;
   border: none;
   background: transparent;
   padding: 8px 14px;
@@ -501,4 +507,101 @@
 .tooltip-wrap:focus-within .tooltip-bubble {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* ============ Slot picker, assistant search, load more, link buttons ============ */
+
+.slot-picker {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.slot-btn {
+  padding: var(--space-2) var(--space-3);
+  min-height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.slot-btn:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.slot-btn.is-selected {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-surface);
+}
+
+.assistant-search {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.assistant-search-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.assistant-search-row .input {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-5);
+}
+
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.doc-list-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.doc-list-item p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.assistant-search .field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }

@@ -10,6 +10,8 @@ import { Alert } from "../components/ui/Alert.jsx";
 import { useToast } from "../components/ui/ToastContext.jsx";
 import { CalendarIcon } from "../components/ui/icons.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import PatientDocumentsModal from "../components/Document/PatientDocumentsModal.jsx";
+import { doctorSalutation } from "../utils.js";
 
 const FILTERS = [
   { key: "today", label: "Today" },
@@ -19,6 +21,8 @@ const FILTERS = [
   { key: "all", label: "All" },
 ];
 
+const PAGE = 100;
+
 export default function DoctorDashboard() {
   const { user } = useAuth();
   const toast = useToast();
@@ -27,11 +31,17 @@ export default function DoctorDashboard() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("today");
   const [chatPeer, setChatPeer] = useState(null);
+  const [docsPatient, setDocsPatient] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     api
-      .get("/appointments")
-      .then(({ data }) => setAppointments(data.appointments))
+      .get("/appointments", { params: { limit: PAGE } })
+      .then(({ data }) => {
+        setAppointments(data.appointments);
+        setHasMore(data.appointments.length === PAGE);
+      })
       .catch(() => setError("Couldn't load your appointments."))
       .finally(() => setLoading(false));
   }, []);
@@ -42,6 +52,19 @@ export default function DoctorDashboard() {
       setAppointments((prev) => prev.map((a) => (a.id === id ? data.appointment : a)));
     } catch (err) {
       toast.error(err.response?.data?.error || "Couldn't update the appointment status.");
+    }
+  }
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const { data } = await api.get("/appointments", { params: { limit: PAGE, offset: appointments.length } });
+      setAppointments((prev) => [...prev, ...data.appointments]);
+      setHasMore(data.appointments.length === PAGE);
+    } catch {
+      toast.error("Couldn't load more appointments.");
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -74,7 +97,7 @@ export default function DoctorDashboard() {
     <>
       <PageHeader
         eyebrow="Doctor"
-        title={`Good to see you, Dr. ${user?.name?.split(" ").slice(-1)[0] || ""}`}
+        title={`Good to see you, ${doctorSalutation(user?.name)}`}
         subtitle={
           todaysCount > 0
             ? `You have ${todaysCount} appointment${todaysCount === 1 ? "" : "s"} today.`
@@ -104,11 +127,29 @@ export default function DoctorDashboard() {
         ) : (
           <div className="grid">
             {filtered.map((a) => (
-              <AppointmentCard key={a.id} appointment={a} onStatusChange={handleStatusChange} onMessage={handleMessage} />
+              <AppointmentCard
+                key={a.id}
+                appointment={a}
+                onStatusChange={handleStatusChange}
+                onMessage={handleMessage}
+                onDocuments={(appt) => setDocsPatient({ id: appt.patient_id, name: appt.patient_name })}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {hasMore && (
+        <div className="load-more">
+          <button type="button" className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load more appointments"}
+          </button>
+        </div>
+      )}
+
+      {docsPatient && (
+        <PatientDocumentsModal patientId={docsPatient.id} patientName={docsPatient.name} onClose={() => setDocsPatient(null)} />
+      )}
 
       {chatPeer && (
         <Modal title={`Message ${chatPeer.name}`} onClose={() => setChatPeer(null)} className="modal-chat">

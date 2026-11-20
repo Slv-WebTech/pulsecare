@@ -94,7 +94,14 @@ export default function ChatWindow({ peerId, peerName, hideHeader = false }) {
             return (
               <div key={m.id} className={`chat-bubble-row ${isOwn ? "is-own" : ""}`}>
                 <div className="chat-bubble">
-                  <p>{m.body}</p>
+                  {m.body && <p>{m.body}</p>}
+                  {m.file_url && (
+                    <p>
+                      <a href={m.file_url} target="_blank" rel="noopener noreferrer">
+                        Attachment
+                      </a>
+                    </p>
+                  )}
                   <span className="chat-bubble-time">
                     {new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                   </span>

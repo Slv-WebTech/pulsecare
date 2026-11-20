@@ -5,11 +5,11 @@ import { Menu, MenuItem } from "../ui/Menu.jsx";
 import { PulseIcon, ChevronDownIcon, LogOutIcon, UserIcon } from "../ui/icons.jsx";
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await logout();
     navigate("/login");
   }
 
@@ -20,11 +20,11 @@ export default function Navbar() {
           <span className="brand-mark">
             <PulseIcon size={17} />
           </span>
-          Healthcare Portal
+          PulseCare
         </Link>
 
-        <div className="header-actions">
-          {user ? (
+        <nav className="header-actions" aria-label="Main">
+          {loading ? null : user ? (
             <>
               <span className="role-chip">{user.role}</span>
               <Menu
@@ -62,7 +62,7 @@ export default function Navbar() {
               </Link>
             </>
           )}
-        </div>
+        </nav>
       </div>
     </header>
   );
